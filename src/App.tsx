@@ -300,15 +300,22 @@ const BattleCard = ({ battle, onEnter }: BattleCardProps) => {
 const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string) => void }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       const data = await login(email);
-      onLoginSuccess(data.user, data.token);
-    } catch (err) {
+      if (data.token && data.user) {
+        onLoginSuccess(data.user, data.token);
+      } else {
+        setError(data.error || "Login failed. Please try again.");
+      }
+    } catch (err: any) {
       console.error(err);
+      setError(err.message || "Connection failed. Check your internet.");
     } finally {
       setLoading(false);
     }
@@ -337,6 +344,19 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
               className="w-full mood-input py-4 text-base"
             />
           </div>
+
+          <AnimatePresence>
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black p-3 rounded-xl uppercase tracking-widest text-center"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <button 
             type="submit" 
             disabled={loading}
@@ -359,6 +379,7 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState("battles");
   const [liveBattles, setLiveBattles] = useState<any[]>([]);
   const [endedBattles, setEndedBattles] = useState<any[]>([]);
@@ -369,11 +390,17 @@ export default function App() {
   const battles = currentTab === 'history' ? endedBattles : liveBattles;
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("mood_token");
-    const savedUser = localStorage.getItem("mood_user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+    try {
+      const savedToken = localStorage.getItem("mood_token");
+      const savedUser = localStorage.getItem("mood_user");
+      if (savedToken && savedUser) {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      }
+    } catch (err) {
+      console.error("Local storage access failed", err);
+    } finally {
+      setIsInitialLoading(false);
     }
   }, []);
 
@@ -462,6 +489,14 @@ export default function App() {
       alert("Failed to create battle. Try again.");
     }
   };
+
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-[#0c0d0e] flex items-center justify-center font-black uppercase italic text-gray-700 animate-pulse tracking-[0.4em]">
+        Establishing Connection...
+      </div>
+    );
+  }
 
   if (!token || !user) {
     return <Login onLoginSuccess={handleLoginSuccess} />;

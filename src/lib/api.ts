@@ -3,11 +3,18 @@ const API_BASE = "/api";
 async function safeJson(res: Response) {
   const contentType = res.headers.get("content-type");
   if (contentType && contentType.includes("application/json")) {
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || data.message || `Server error: ${res.status}`);
+    }
+    return data;
   }
   const text = await res.text();
+  if (!res.ok) {
+    throw new Error(text || `Server error: ${res.status}`);
+  }
   console.error("Non-JSON response received:", text.substring(0, 500));
-  throw new Error(`Server returned ${res.status}: ${text.substring(0, 100)}`);
+  return text;
 }
 
 export async function login(email: string) {
