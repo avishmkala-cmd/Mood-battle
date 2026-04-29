@@ -151,7 +151,6 @@ const Sidebar = ({ user, currentTab, onTabChange, onLogout, onUpdateUser, token 
   const tabs = [
     { id: "battles", icon: Radio, label: "Live Mood Arenas" },
     { id: "training", icon: Mic2, label: "Training Grounds" },
-    { id: "history", icon: Clock, label: "Recent Outcomes" },
     { id: "leaderboard", icon: Trophy, label: "Leaderboard" }
   ];
 
@@ -215,6 +214,16 @@ const Sidebar = ({ user, currentTab, onTabChange, onLogout, onUpdateUser, token 
               </div>
             )}
             <p className="text-[10px] text-gray-500 font-bold mt-0.5 tracking-widest">{user.xp} XP • LVL {Math.floor(user.xp / 100) + 1}</p>
+            <div className="mt-2 w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${user.xp % 100}%` }}
+                className="h-full bg-[#5eff00]"
+              />
+            </div>
+            <p className="text-[8px] text-gray-600 font-black uppercase mt-1 tracking-widest leading-tight">
+              {100 - (user.xp % 100)} XP TO LEVEL {Math.floor(user.xp / 100) + 2}
+            </p>
           </div>
         </div>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl text-gray-500 hover:text-red-500 hover:bg-red-500/5 transition-all text-xs font-black uppercase tracking-widest">
@@ -387,7 +396,7 @@ export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
 
-  const battles = currentTab === 'history' ? endedBattles : liveBattles;
+  const battles = liveBattles;
 
   useEffect(() => {
     try {
@@ -406,7 +415,21 @@ export default function App() {
 
   useEffect(() => {
     if (token && user) {
-      const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const getSocketUrl = () => {
+        const envUrl = import.meta.env.VITE_API_URL;
+        if (!envUrl) return window.location.origin;
+        
+        try {
+          // Use origin from VITE_API_URL to ensure we connect to the right host
+          // without accidental path prefixes like /Abc
+          const url = new URL(envUrl);
+          return url.origin;
+        } catch (e) {
+          return window.location.origin;
+        }
+      };
+      
+      const socketUrl = getSocketUrl();
       const s = io(socketUrl);
       setSocket(s);
       fetchBattles();
@@ -425,12 +448,8 @@ export default function App() {
 
   const fetchBattles = async () => {
     try {
-      const data = await getBattles(currentTab === 'history' ? 'ended' : 'live');
-      if (currentTab === 'history') {
-        setEndedBattles(data);
-      } else {
-        setLiveBattles(data);
-      }
+      const data = await getBattles('live');
+      setLiveBattles(data);
     } catch (err) {
       console.error(err);
     }
@@ -539,17 +558,15 @@ export default function App() {
               exit={{ opacity: 0, x: -10 }}
               className="p-10 max-w-7xl mx-auto w-full"
             >
-              {(currentTab === "history" || currentTab === "battles") ? (
+              {(currentTab === "battles") ? (
                 <>
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
                     <div>
                       <h2 className="text-5xl font-black italic tracking-tighter uppercase mb-3">
-                        {currentTab === "history" ? "Recent Outcomes" : "Live Mood Arenas"}
+                        Live Mood Arenas
                       </h2>
                       <p className="text-gray-500 font-medium max-w-md italic tracking-tight">
-                        {currentTab === "history" 
-                          ? "Browse the signals that shaped the recent landscape." 
-                          : "Competition is the emotional catalyst. Join an arena or start your own mood session."}
+                        Competition is the emotional catalyst. Join an arena or start your own mood session.
                       </p>
                       
                       <div className="flex gap-2 mt-6">
