@@ -34,8 +34,19 @@ import {
   updateUsername
 } from "./lib/api";
 
-// Initialize AI
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Lazy initialization for AI to prevent crashes if API key is missing during boot
+let aiInstance: GoogleGenAI | null = null;
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is missing. AI features will not work.");
+      return null;
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 async function generateLocalBattlePrompt() {
   const mainstreamGenres = [
@@ -47,6 +58,9 @@ async function generateLocalBattlePrompt() {
   const selectedTitle = fallbackTitles[Math.floor(Math.random() * fallbackTitles.length)];
 
   try {
+    const ai = getAI();
+    if (!ai) throw new Error("AI not initialized");
+
     const promptText = `
       Generate a unique and highly creative music production prompt for a beat battle.
       Theme: High-stakes sonic warfare.
