@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import Database from "better-sqlite3";
+import bcrypt from "bcrypt";
 import * as jose from "jose";
 import fs from "fs";
 import cors from "cors";
@@ -25,6 +26,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE,
+    password TEXT,
     username TEXT,
     xp INTEGER DEFAULT 0,
     avatar TEXT
@@ -81,6 +83,9 @@ try {
     // Set createdAt for existing battles to startTime if they have one
     db.prepare("UPDATE battles SET createdAt = startTime WHERE createdAt IS NULL").run();
   }
+  if (!columns.includes("password")) {
+    db.prepare("ALTER TABLE users ADD COLUMN password TEXT").run();
+  }
 } catch (e) {
   console.error("Migration error:", e);
 }
@@ -128,16 +133,55 @@ async function startServer() {
   };
 
   // Auth Endpoints
+  app.post("/api/auth/signup", async (req, res) => {
+    const { email, password, username: requestedUsername } = req.body;
+    if (!email || !password) return res.status(400).send("Email and password required");
+
+    const existingUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+    if (existingUser) return res.status(400).send("User already exists");
+
+    const id = Math.random().toString(36).substr(2, 9);
+    const username = requestedUsername || email.split("@")[0];
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    try {
+      db.prepare("INSERT INTO users (id, email, password, username) VALUES (?, ?, ?, ?)").run(id, email, hashedPassword, username);
+      const user = { id, email, username, xp: 0 };
+      
+      const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("24h")
+        .sign(JWT_SECRET);
+
+      res.json({ token, user });
+    } catch (err) {
+      console.error(err);
+      res.status(500).send("Error creating user");
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
-    const { email } = req.body;
+    const { email, password } = req.body;
     if (!email) return res.status(400).send("Email required");
 
     let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+    
+    // Legacy support or first-time migration: if user has no password yet (from old system)
+    // they might need to set one or we can allow one-time passwordless login to set it.
+    // But for now, let's enforce passwords if present.
     if (!user) {
-      const id = Math.random().toString(36).substr(2, 9);
-      const username = email.split("@")[0];
-      db.prepare("INSERT INTO users (id, email, username) VALUES (?, ?, ?)").run(id, email, username);
-      user = { id, email, username, xp: 0 };
+      return res.status(401).send("User not found. Please sign up.");
+    }
+
+    if (user.password) {
+      if (!password) return res.status(400).send("Password required");
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) return res.status(401).send("Invalid password");
+    } else if (password) {
+      // User from old system without password - auto-set it on first login attempt
+      const hashedPassword = await bcrypt.hash(password, 10);
+      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, user.id);
     }
 
     const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
@@ -146,7 +190,7 @@ async function startServer() {
       .setExpirationTime("24h")
       .sign(JWT_SECRET);
 
-    res.json({ token, user });
+    res.json({ token, user: { id: user.id, email: user.email, username: user.username, xp: user.xp, avatar: user.avatar } });
   });
 
   // User Data

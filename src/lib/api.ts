@@ -97,11 +97,19 @@ async function fetchWithRetry(fetcher: () => Promise<Response>, maxRetries = 5):
   throw lastError;
 }
 
-export async function login(email: string) {
+export async function login(email: string, password?: string) {
   return fetchWithRetry(() => fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
+  }));
+}
+
+export async function signup(email: string, password?: string, username?: string) {
+  return fetchWithRetry(() => fetch(`${API_BASE}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, username }),
   }));
 }
 

@@ -24,6 +24,7 @@ import { io, Socket } from "socket.io-client";
 import { GoogleGenAI } from "@google/genai";
 import { 
   login, 
+  signup,
   getBattles, 
   createBattle, 
   getBattleInfo, 
@@ -308,6 +309,9 @@ const BattleCard = ({ battle, onEnter }: BattleCardProps) => {
 
 const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string) => void }) => {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,11 +320,17 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
     setLoading(true);
     setError(null);
     try {
-      const data = await login(email);
+      let data;
+      if (isSignUp) {
+        data = await signup(email, password, username);
+      } else {
+        data = await login(email, password);
+      }
+
       if (data.token && data.user) {
         onLoginSuccess(data.user, data.token);
       } else {
-        setError(data.error || "Login failed. Please try again.");
+        setError(data.error || `${isSignUp ? 'Sign up' : 'Login'} failed. Please try again.`);
       }
     } catch (err: any) {
       console.error(err);
@@ -331,26 +341,58 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0c0d0e] p-6">
-      <div className="w-full max-w-md mood-card p-10">
+    <div className="min-h-screen flex items-center justify-center bg-[#0c0d0e] p-6 overflow-y-auto">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md mood-card p-10 my-8"
+      >
         <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mb-6">
+          <div className="w-16 h-16 bg-[#5eff00] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[#5eff00]/10">
             <Zap className="text-black fill-black" size={40} />
           </div>
-          <h2 className="text-4xl font-black tracking-tighter uppercase italic">Mood Battle</h2>
-          <p className="text-gray-500 text-sm mt-2">Enter the producer battlegrounds</p>
+          <h2 className="text-4xl font-black tracking-tighter uppercase italic text-white leading-none">Mood Battle</h2>
+          <p className="text-gray-500 text-sm mt-3 font-medium italic">
+            {isSignUp ? "Register your signal for the arena" : "Enter the producer battlegrounds"}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isSignUp && (
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Producer Alias</label>
+              <input 
+                type="text" 
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Alias (Min 3 chars)"
+                className="w-full mood-input py-4 text-sm"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Email Address</label>
+            <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Email Address</label>
             <input 
               type="email" 
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="producer@studio.com"
-              className="w-full mood-input py-4 text-base"
+              className="w-full mood-input py-4 text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Access Protocol (Password)</label>
+            <input 
+              type="password" 
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full mood-input py-4 text-sm"
             />
           </div>
 
@@ -359,6 +401,7 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
               <motion.div 
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
                 className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black p-3 rounded-xl uppercase tracking-widest text-center"
               >
                 {error}
@@ -369,16 +412,28 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full mood-btn py-4 text-base font-bold uppercase tracking-widest"
+            className="w-full mood-btn py-4 text-sm font-black uppercase tracking-[0.2em]"
           >
-            {loading ? "Initializing..." : "Join Battleground"}
+            {loading ? "Initializing..." : isSignUp ? "Establish Signal" : "Connect To Arena"}
           </button>
         </form>
 
-        <p className="text-center text-[10px] text-gray-600 mt-10 uppercase tracking-widest leading-relaxed">
-          By joining, you agree to our rules of creative engagement and high-frequency production.
+        <div className="mt-8 text-center">
+          <button 
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(null);
+            }}
+            className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5eff00] hover:text-white transition-colors"
+          >
+            {isSignUp ? "Already registered? Login" : "New producer? Register here"}
+          </button>
+        </div>
+
+        <p className="text-center text-[9px] text-gray-700 mt-10 uppercase tracking-[0.3em] font-black leading-relaxed">
+          BY JOINING, YOU AGREE TO OUR RULES OF CREATIVE ENGAGEMENT AND HIGH-FREQUENCY PRODUCTION.
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 };
