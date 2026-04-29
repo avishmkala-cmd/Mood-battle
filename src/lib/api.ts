@@ -49,22 +49,23 @@ async function safeJson(res: Response, retryCount = 0): Promise<any> {
   // Detect AI Studio 'Starting Server' or Netlify 404/bootstrapping pages
   const isBooting = text.includes("Starting Server...") || 
                     text.includes("Establishing Connection") ||
-                    (text.includes("<html") && text.includes("title>My Google AI Studio App</title>"));
+                    text.includes("title>Starting Server...") ||
+                    (text.includes("<html") && text.includes("MOOD BATTLE") && !text.includes("root")); // Catching SPA fallback if it's the wrong page
 
-  if (isBooting && retryCount < 3) {
-    console.log(`Backend is starting up... retrying in 2s (Attempt ${retryCount + 1})`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // We need to re-fetch, but safeJson doesn't have the original request info.
-    // This is a limitation. However, we can throw a specific error that the caller can handle,
-    // or we can pass a function to re-fetch.
-    // For simplicity, let's throw a retryable error.
+  if (isBooting && retryCount < 10) {
+    const delay = retryCount < 3 ? 2000 : 5000;
+    console.log(`Backend is starting up... retrying in ${delay/1000}s (Attempt ${retryCount + 1})`);
+    await new Promise(resolve => setTimeout(resolve, delay));
     throw new Error("BACKEND_STARTING");
   }
 
   if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
     if (text.includes("Starting Server...")) {
-      throw new Error("The backend server is still starting up. Please wait 5-10 seconds and try again.");
+      throw new Error("The backend server is still starting up. Please wait a moment and try again.");
+    }
+    // If we're getting our own SPA instead of API response
+    if (text.includes("id=\"root\"") || text.includes("MOOD BATTLE")) {
+       throw new Error(`API redirect error: The request to "${res.url}" returned the frontend app instead of the backend. Netlify redirects might not be working.`);
     }
     throw new Error(`Critical Error: Received HTML instead of JSON. The backend might be misconfigured. URL: ${res.url}`);
   }
