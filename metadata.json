@@ -1,0 +1,13 @@
+{
+  "name": "MOOD BATTLE",
+  "description": "An emotional, prompt-based beat battle platform for music producers.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "Multiplayer Lobbies",
+    "Real-time Battles",
+    "AI-Powered Prompts",
+    "Community Voting"
+  ]
+}
