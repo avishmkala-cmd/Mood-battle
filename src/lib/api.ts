@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 async function safeJson(res: Response) {
   const contentType = res.headers.get("content-type");
@@ -11,6 +11,9 @@ async function safeJson(res: Response) {
   }
   const text = await res.text();
   if (!res.ok) {
+    if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
+      throw new Error(`API error: Expected JSON but received HTML. The backend at "${res.url}" might be offline or misconfigured.`);
+    }
     throw new Error(text || `Server error: ${res.status}`);
   }
   console.error("Non-JSON response received:", text.substring(0, 500));

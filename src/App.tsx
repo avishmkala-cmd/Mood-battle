@@ -406,7 +406,8 @@ export default function App() {
 
   useEffect(() => {
     if (token && user) {
-      const s = io();
+      const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+      const s = io(socketUrl);
       setSocket(s);
       fetchBattles();
       
