@@ -3,6 +3,18 @@
   publish = "dist"
 
 [[redirects]]
+  from = "/api/*"
+  to = "https://ais-dev-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/socket.io/*"
+  to = "https://ais-dev-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app/socket.io/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

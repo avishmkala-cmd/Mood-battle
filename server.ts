@@ -96,6 +96,17 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+
+  // Request logger for debugging API issues
+  app.use((req, _res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+  });
+
+  // Health and Debug checks
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", time: Date.now() });
+  });
   app.use("/uploads", express.static(uploadDir));
   app.get("/uploads/*", (req, res) => {
     res.status(404).send("File not found");
@@ -421,7 +432,8 @@ async function startServer() {
 
   // API 404 fallback
   app.all("/api/*", (req, res) => {
-    res.status(404).json({ error: "API route not found" });
+    console.log(`[404 fallback] ${req.method} ${req.path}`);
+    res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
   });
 
   // Socket.io logic
