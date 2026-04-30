@@ -64,8 +64,13 @@ async function safeJson(res: Response, retryCount = 0): Promise<any> {
       throw new Error("The backend server is still starting up. Please wait a moment and try again.");
     }
     // If we're getting our own SPA instead of API response
+    const isNetlify = window.location.hostname.includes("netlify.app");
     if (text.includes("id=\"root\"") || text.includes("MOOD BATTLE")) {
-       throw new Error(`API redirect error: The request to "${res.url}" returned the frontend app instead of the backend. Netlify redirects might not be working.`);
+       let errorMsg = `API Error: The backend at "${res.url}" returned the frontend app instead of data.`;
+       if (isNetlify) {
+         errorMsg += "\n\nTROUBLESHOOTING:\n1. Your Netlify site needs VITE_API_URL configured.\n2. Go to Netlify Dashboard > Site Settings > Environment Variables.\n3. Add VITE_API_URL and set it to: https://ais-pre-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app\n4. Trigger a new deploy.";
+       }
+       throw new Error(errorMsg);
     }
     throw new Error(`Critical Error: Received HTML instead of JSON. The backend might be misconfigured. URL: ${res.url}`);
   }

@@ -1,0 +1,3 @@
+/api/* https://ais-pre-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app/api/:splat 200!
+/socket.io/* https://ais-pre-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app/socket.io/:splat 200!
+/* /index.html 200
