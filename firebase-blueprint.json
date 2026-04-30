@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public user profile information",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Display name" },
+        "avatar": { "type": "string", "description": "Avatar URL" },
+        "xp": { "type": "integer", "description": "Experience points" }
+      },
+      "required": ["username", "xp"]
+    },
+    "PrivateUserInfo": {
+      "title": "Private User Info",
+      "description": "Sensitive user data like email",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public profiles"
+    },
+    "/users/{userId}/private/info": {
+      "schema": "PrivateUserInfo",
+      "description": "Restricted user info"
+    }
+  }
+}

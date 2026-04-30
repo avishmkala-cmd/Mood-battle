@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validation Blueprint for User
+    function isValidUser(data) {
+      return data.username is string && data.username.size() >= 3 && data.username.size() <= 32 &&
+             data.xp is int && data.xp >= 0 &&
+             (data.avatar == null || (data.avatar is string && data.avatar.size() <= 500)) &&
+             data.keys().hasAll(['username', 'xp']) && data.keys().size() <= 3;
+    }
+
+    // Validation Blueprint for Private Info
+    function isValidPrivateInfo(data) {
+      return data.email is string && data.email.size() <= 128 && 
+             data.keys().hasAll(['email']) && data.keys().size() == 1;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.xp > 0; // Only show active producers in list
+      
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        // Identity Integrity: ownerId/uid is implicit as the doc ID in this structure
+        // Immutable XP check (only systems should update XP, but for now we allow self-update if it doesn't change?)
+        // Actually, let's allow username update and avatar update
+        incoming().diff(existing()).affectedKeys().hasOnly(['username', 'avatar']) ||
+        // XP update action (if we eventually allow it)
+        incoming().diff(existing()).affectedKeys().hasOnly(['xp'])
+      );
+
+      match /private/info {
+        allow get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidPrivateInfo(incoming());
+        allow update: if isOwner(userId) && isValidPrivateInfo(incoming()) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['email']);
+      }
+    }
+  }
+}

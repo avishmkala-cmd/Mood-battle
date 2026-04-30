@@ -6,10 +6,20 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import Database from "better-sqlite3";
-import bcrypt from "bcrypt";
 import * as jose from "jose";
+import admin from "firebase-admin";
 import fs from "fs";
 import cors from "cors";
+
+// Initialize Firebase Admin
+try {
+  const config = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+  admin.initializeApp({
+    projectId: config.projectId
+  });
+} catch (e) {
+  console.error("Firebase Admin initialization error:", e);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,7 +36,6 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE,
-    password TEXT,
     username TEXT,
     xp INTEGER DEFAULT 0,
     avatar TEXT
@@ -83,9 +92,6 @@ try {
     // Set createdAt for existing battles to startTime if they have one
     db.prepare("UPDATE battles SET createdAt = startTime WHERE createdAt IS NULL").run();
   }
-  if (!columns.includes("password")) {
-    db.prepare("ALTER TABLE users ADD COLUMN password TEXT").run();
-  }
 } catch (e) {
   console.error("Migration error:", e);
 }
@@ -133,64 +139,56 @@ async function startServer() {
   };
 
   // Auth Endpoints
-  app.post("/api/auth/signup", async (req, res) => {
-    const { email, password, username: requestedUsername } = req.body;
-    if (!email || !password) return res.status(400).send("Email and password required");
-
-    const existingUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
-    if (existingUser) return res.status(400).send("User already exists");
-
-    const id = Math.random().toString(36).substr(2, 9);
-    const username = requestedUsername || email.split("@")[0];
-    const hashedPassword = await bcrypt.hash(password, 10);
+  app.post("/api/auth/firebase", async (req, res) => {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).send("ID Token required");
 
     try {
-      db.prepare("INSERT INTO users (id, email, password, username) VALUES (?, ?, ?, ?)").run(id, email, hashedPassword, username);
-      const user = { id, email, username, xp: 0 };
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const { uid, email, name, picture } = decodedToken;
+
+      let user = db.prepare("SELECT * FROM users WHERE id = ?").get(uid) as any;
       
+      if (!user) {
+        // Migration check: check if user exists by email from old system
+        const existingByEmail = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+        if (existingByEmail) {
+          // Relink old user to new Firebase UID
+          db.prepare("UPDATE users SET id = ?, avatar = ? WHERE email = ?").run(
+            uid,
+            picture || existingByEmail.avatar,
+            email
+          );
+          user = db.prepare("SELECT * FROM users WHERE id = ?").get(uid);
+          console.log(`[Auth] Migrated user ${email} to Firebase UID ${uid}`);
+        } else {
+          // Create new user
+          db.prepare("INSERT INTO users (id, email, username, avatar) VALUES (?, ?, ?, ?)").run(
+            uid, 
+            email, 
+            name || email?.split("@")[0], 
+            picture
+          );
+          user = db.prepare("SELECT * FROM users WHERE id = ?").get(uid);
+          console.log(`[Auth] Created new user ${email} via Firebase`);
+        }
+      } else {
+        // Update user info if needed
+        db.prepare("UPDATE users SET avatar = ? WHERE id = ?").run(picture || user.avatar, uid);
+        user = db.prepare("SELECT * FROM users WHERE id = ?").get(uid);
+      }
+
       const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
         .setExpirationTime("24h")
         .sign(JWT_SECRET);
 
-      res.json({ token, user });
-    } catch (err) {
-      console.error(err);
-      res.status(500).send("Error creating user");
+      res.json({ token, user: { id: user.id, email: user.email, username: user.username, xp: user.xp, avatar: user.avatar } });
+    } catch (error) {
+      console.error("Firebase auth error details:", error);
+      res.status(401).send("Invalid Firebase token. Check backend logs.");
     }
-  });
-
-  app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email) return res.status(400).send("Email required");
-
-    let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
-    
-    // Legacy support or first-time migration: if user has no password yet (from old system)
-    // they might need to set one or we can allow one-time passwordless login to set it.
-    // But for now, let's enforce passwords if present.
-    if (!user) {
-      return res.status(401).send("User not found. Please sign up.");
-    }
-
-    if (user.password) {
-      if (!password) return res.status(400).send("Password required");
-      const match = await bcrypt.compare(password, user.password);
-      if (!match) return res.status(401).send("Invalid password");
-    } else if (password) {
-      // User from old system without password - auto-set it on first login attempt
-      const hashedPassword = await bcrypt.hash(password, 10);
-      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, user.id);
-    }
-
-    const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("24h")
-      .sign(JWT_SECRET);
-
-    res.json({ token, user: { id: user.id, email: user.email, username: user.username, xp: user.xp, avatar: user.avatar } });
   });
 
   // User Data

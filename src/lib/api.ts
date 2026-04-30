@@ -102,19 +102,11 @@ async function fetchWithRetry(fetcher: () => Promise<Response>, maxRetries = 5):
   throw lastError;
 }
 
-export async function login(email: string, password?: string) {
-  return fetchWithRetry(() => fetch(`${API_BASE}/auth/login`, {
+export async function loginWithFirebase(idToken: string) {
+  return fetchWithRetry(() => fetch(`${API_BASE}/auth/firebase`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  }));
-}
-
-export async function signup(email: string, password?: string, username?: string) {
-  return fetchWithRetry(() => fetch(`${API_BASE}/auth/signup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, username }),
+    body: JSON.stringify({ idToken }),
   }));
 }
 
