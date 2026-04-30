@@ -31,7 +31,9 @@ import {
   voteSubmission, 
   getLeaderboard,
   updateUsername,
-  loginWithFirebase
+  loginWithFirebase,
+  login,
+  signup
 } from "./lib/api";
 import { signInWithGoogle } from "./lib/firebase";
 
@@ -159,7 +161,12 @@ const Sidebar = ({ user, currentTab, onTabChange, onLogout, onUpdateUser, token 
     <div className="h-screen border-r border-white/5 flex flex-col p-8 sticky top-0 bg-[#050505]">
       <div className="flex items-center gap-4 mb-16">
         <div className="w-12 h-12 bg-[#5eff00] rounded-2xl flex items-center justify-center shadow-lg shadow-[#5eff00]/10">
-          <Zap className="text-black fill-black" size={28} />
+          <div className="relative w-7 h-7 flex items-center justify-center">
+            <Music className="text-black absolute translate-y-[-2px] translate-x-[-1px]" size={20} strokeWidth={3} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-black font-black text-sm italic translate-y-[2px]">M</span>
+            </div>
+          </div>
         </div>
         <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white flex flex-col leading-none">
           Mood
@@ -308,6 +315,11 @@ const BattleCard = ({ battle, onEnter }: BattleCardProps) => {
 
 
 const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string) => void }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [showTraditional, setShowTraditional] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -333,6 +345,31 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      let data;
+      if (isSignUp) {
+        data = await signup(email, password, username);
+      } else {
+        data = await login(email, password);
+      }
+
+      if (data.token && data.user) {
+        onLoginSuccess(data.user, data.token);
+      } else {
+        setError(data.error || `${isSignUp ? 'Sign up' : 'Login'} failed. Please try again.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Connection failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0c0d0e] p-6 overflow-y-auto">
       <motion.div 
@@ -341,43 +378,138 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
         className="w-full max-w-md mood-card p-10 my-8 text-center"
       >
         <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-[#5eff00] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[#5eff00]/10">
-            <Zap className="text-black fill-black" size={40} />
+          <div className="w-20 h-20 bg-[#5eff00] rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-[#5eff00]/10 relative group">
+            <div className="absolute inset-0 bg-white/20 rounded-3xl scale-90 group-hover:scale-100 transition-transform duration-500" />
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              <Music className="text-black absolute translate-y-[-4px]" size={36} strokeWidth={3} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-black font-black text-2xl italic translate-y-[6px]">M</span>
+              </div>
+            </div>
+            <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-black rounded-xl flex items-center justify-center border border-white/10 shadow-lg">
+              <Zap className="text-[#5eff00] fill-[#5eff00]" size={14} />
+            </div>
           </div>
           <h2 className="text-4xl font-black tracking-tighter uppercase italic text-white leading-none">Mood Battle</h2>
           <p className="text-gray-500 text-sm mt-3 font-medium italic">
-            Enter the producer battlegrounds
+            High-Stakes Sonic Warfare
           </p>
         </div>
 
         <div className="space-y-6">
-          <button 
-            onClick={handleGoogleLogin} 
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-4 bg-white text-black py-4 rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:bg-[#5eff00] transition-all disabled:opacity-50"
-          >
-            <div className="w-6 h-6 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" className="w-5 h-5">
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  fill="#4285F4"
+          {!showTraditional ? (
+            <>
+              <button 
+                onClick={handleGoogleLogin} 
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-4 bg-white text-black py-4 rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:bg-[#5eff00] transition-all disabled:opacity-50"
+              >
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5">
+                    <path
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      fill="#EA4335"
+                    />
+                  </svg>
+                </div>
+                {loading ? "Authenticating..." : "Login with Google"}
+              </button>
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest"><span className="bg-[#0c0d0e] px-4 text-gray-700">or</span></div>
+              </div>
+
+              <button 
+                onClick={() => setShowTraditional(true)}
+                className="text-xs font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors"
+              >
+                Use Email & Password
+              </button>
+            </>
+          ) : (
+            <motion.form 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              onSubmit={handleSubmit} 
+              className="space-y-6 text-left"
+            >
+              {isSignUp && (
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Producer Alias</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Alias"
+                    className="w-full mood-input py-4 text-sm"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Email Address</label>
+                <input 
+                  type="email" 
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="producer@studio.com"
+                  className="w-full mood-input py-4 text-sm"
                 />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 ml-1">Password</label>
+                <input 
+                  type="password" 
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full mood-input py-4 text-sm"
                 />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  fill="#EA4335"
-                />
-              </svg>
-            </div>
-            {loading ? "Authenticating..." : "Login with Google"}
-          </button>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full mood-btn py-4 text-sm font-black uppercase tracking-[0.2em]"
+              >
+                {loading ? "Initializing..." : isSignUp ? "Create Account" : "Access Arena"}
+              </button>
+
+              <div className="flex flex-col gap-4 mt-6 items-center">
+                <button 
+                  type="button"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-[10px] font-black uppercase tracking-[0.1em] text-[#5eff00] hover:text-white transition-colors"
+                >
+                  {isSignUp ? "Already have an account? Login" : "New producer? Sign up here"}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowTraditional(false)}
+                  className="text-[10px] font-black uppercase tracking-[0.1em] text-gray-500 hover:text-white transition-colors"
+                >
+                  Back to Google Login
+                </button>
+              </div>
+            </motion.form>
+          )}
 
           <AnimatePresence>
             {error && (
@@ -385,9 +517,26 @@ const Login = ({ onLoginSuccess }: { onLoginSuccess: (user: User, token: string)
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black p-3 rounded-xl uppercase tracking-widest text-center"
+                className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black p-3 rounded-xl uppercase tracking-widest text-center leading-relaxed"
               >
                 {error}
+                
+                {error.includes("not authorized for Firebase Auth") && (
+                  <div className="mt-3 p-3 bg-black/60 rounded-xl border border-red-500/20 text-left normal-case font-medium">
+                    <p className="text-[#5eff00] font-black uppercase text-[9px] mb-2">CRITICAL CONFIGURATION STEPS:</p>
+                    <div className="space-y-2 text-[10px] text-gray-400">
+                      <p>1. Open <a href="https://console.firebase.google.com/" target="_blank" className="text-white underline decoration-white/30">Firebase Console</a></p>
+                      <p>2. Select project <span className="text-white font-mono">moodbattle</span> (or your active project)</p>
+                      <p>3. Go to <span className="text-white font-bold">Authentication &gt; Settings &gt; Authorized domains</span></p>
+                      <p>4. Add <span className="text-[#5eff00] font-mono px-1 bg-white/5 rounded italic">{window.location.hostname}</span></p>
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-white/5">
+                      <p className="text-[9px] leading-tight text-gray-500 font-bold italic">
+                        Note: If you can't see the project, ensure you are logged into the same account (<span className="text-white">avishmkala@gmail.com</span>) in the Firebase Console.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

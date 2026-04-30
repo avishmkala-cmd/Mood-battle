@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import Database from "better-sqlite3";
+import bcrypt from "bcrypt";
 import * as jose from "jose";
 import admin from "firebase-admin";
 import fs from "fs";
@@ -36,6 +37,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE,
+    password TEXT,
     username TEXT,
     xp INTEGER DEFAULT 0,
     avatar TEXT
@@ -91,6 +93,12 @@ try {
     db.prepare("ALTER TABLE battles ADD COLUMN createdAt INTEGER").run();
     // Set createdAt for existing battles to startTime if they have one
     db.prepare("UPDATE battles SET createdAt = startTime WHERE createdAt IS NULL").run();
+  }
+
+  const userCols = db.prepare("PRAGMA table_info(users)").all() as any[];
+  const userColNames = userCols.map(c => c.name);
+  if (!userColNames.includes("password")) {
+    db.prepare("ALTER TABLE users ADD COLUMN password TEXT").run();
   }
 } catch (e) {
   console.error("Migration error:", e);
@@ -188,6 +196,80 @@ async function startServer() {
     } catch (error) {
       console.error("Firebase auth error details:", error);
       res.status(401).send("Invalid Firebase token. Check backend logs.");
+    }
+  });
+
+  app.post("/api/auth/signup", async (req, res) => {
+    const { email, password, username: requestedUsername } = req.body;
+    console.log(`[Auth] Signup attempt: ${email}`);
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    try {
+      const existingUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "An account with this email already exists" });
+      }
+
+      const id = Math.random().toString(36).substr(2, 9);
+      const username = (requestedUsername || email.split("@")[0]).substring(0, 20); // Basic length limit
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      db.prepare("INSERT INTO users (id, email, password, username) VALUES (?, ?, ?, ?)").run(id, email, hashedPassword, username);
+      
+      const user = { id, email, username, xp: 0, avatar: null };
+      console.log(`[Auth] Created user: ${email} (${id})`);
+      
+      const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("24h")
+        .sign(JWT_SECRET);
+
+      res.json({ token, user });
+    } catch (err) {
+      console.error("[Auth] Signup error:", err);
+      res.status(500).json({ error: "Database error during signup. Try again." });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    console.log(`[Auth] Login attempt: ${email}`);
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    try {
+      let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+      
+      if (!user) {
+        return res.status(401).json({ error: "Account not found. Please sign up first." });
+      }
+
+      if (!user.password) {
+        return res.status(401).json({ error: "This account was created with Google Login. Please use 'Login with Google'." });
+      }
+
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(401).json({ error: "Invalid password. Try again." });
+      }
+
+      const token = await new jose.SignJWT({ id: user.id, email: user.email, username: user.username })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("24h")
+        .sign(JWT_SECRET);
+
+      console.log(`[Auth] Login successful: ${email}`);
+      res.json({ token, user: { id: user.id, email: user.email, username: user.username, xp: user.xp, avatar: user.avatar } });
+    } catch (err) {
+      console.error("[Auth] Login error:", err);
+      res.status(500).json({ error: "Internal server error during login." });
     }
   });
 

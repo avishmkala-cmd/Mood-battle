@@ -60,19 +60,20 @@ async function safeJson(res: Response, retryCount = 0): Promise<any> {
   }
 
   if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-    if (text.includes("Starting Server...")) {
-      throw new Error("The backend server is still starting up. Please wait a moment and try again.");
+    if (text.includes("Starting Server...") || text.includes("Establishing Connection")) {
+      throw new Error("The backend server is still waking up. Please wait 10 seconds and refresh the page.");
     }
+    
     // If we're getting our own SPA instead of API response
     const isNetlify = window.location.hostname.includes("netlify.app");
     if (text.includes("id=\"root\"") || text.includes("MOOD BATTLE")) {
        let errorMsg = `API Error: The backend at "${res.url}" returned the frontend app instead of data.`;
        if (isNetlify) {
-         errorMsg += "\n\nTROUBLESHOOTING:\n1. Your Netlify site needs VITE_API_URL configured.\n2. Go to Netlify Dashboard > Site Settings > Environment Variables.\n3. Add VITE_API_URL and set it to: https://ais-pre-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app\n4. Trigger a new deploy.";
+         errorMsg += "\n\nNETLIFY TROUBLESHOOTING:\n1. Your Netlify proxy likely timed out or hit a 404.\n2. Ensure your AIS Preview is active: https://ais-pre-2lynzmqbkedqgwxvldsthv-782401959937.asia-southeast1.run.app\n3. If that link shows 'Starting Server', wait for it to finish and try again.";
        }
        throw new Error(errorMsg);
     }
-    throw new Error(`Critical Error: Received HTML instead of JSON. The backend might be misconfigured. URL: ${res.url}`);
+    throw new Error(`Critical Error: Received HTML instead of JSON. The backend might be misconfigured or the AIS preview is sleeping. URL: ${res.url}`);
   }
   
   if (!res.ok) {
@@ -102,11 +103,27 @@ async function fetchWithRetry(fetcher: () => Promise<Response>, maxRetries = 5):
   throw lastError;
 }
 
+export async function login(email: string, password?: string) {
+  return fetchWithRetry(() => fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }));
+}
+
 export async function loginWithFirebase(idToken: string) {
   return fetchWithRetry(() => fetch(`${API_BASE}/auth/firebase`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
+  }));
+}
+
+export async function signup(email: string, password?: string, username?: string) {
+  return fetchWithRetry(() => fetch(`${API_BASE}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, username }),
   }));
 }
 
