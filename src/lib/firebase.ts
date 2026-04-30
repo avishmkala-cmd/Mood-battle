@@ -12,7 +12,11 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 'auth/unauthorized-domain') {
+       const domain = window.location.hostname;
+       throw new Error(`This domain (${domain}) is not authorized for Firebase Auth. Please add it to your Firebase Console under Authentication > Settings > Authorized domains.`);
+    }
     console.error("Error signing in with Google", error);
     throw error;
   }
